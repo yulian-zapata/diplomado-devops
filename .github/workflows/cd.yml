@@ -115,3 +115,36 @@ jobs:
           # ¿En qué categoría debería caer "quiero pagar la multa de tránsito"?
           # (renovacion, certificado, pago o queja)
           test "$CATEGORIA" = "pago"
+
+  # =========================================================================
+  # RETO 8 · Producción: solo con la aprobación de otra persona
+  # =========================================================================
+  produccion:
+    name: Desplegar en producción
+    needs: [construir, staging]     # espera a que staging termine en verde
+    runs-on: ubuntu-latest
+    # El nombre EXACTO del ambiente que crearon en Settings → Environments.
+    # La aprobación no se escribe aquí: la pide el ambiente.
+    environment: produccion
+    env:
+      IMAGEN: ${{ needs.construir.outputs.imagen }}
+      VERSION: ${{ needs.construir.outputs.version }}
+    steps:
+      - name: Iniciar sesión en el registro de GitHub
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Marcar esta versión como la de producción
+        # No se construye nada nuevo: a la MISMA imagen que se probó en staging
+        # se le pone una etiqueta más, "produccion".
+        run: docker buildx imagetools create -t "$IMAGEN:produccion" "$IMAGEN:$VERSION"
+
+      - name: Dejar un resumen en la página de la ejecución
+        run: |
+          {
+            echo "## Producción actualizada"
+            echo ""
+            echo "- Imagen: \`$IMAGEN\`"
+            echo "- Versión: \`$VERSION\`"
+          } >> "$GITHUB_STEP_SUMMARY"
